@@ -1,4 +1,4 @@
-"""Extracts ticker price data from Yahoo Finance and loads to db.
+"""Classic ETL pipeline.
 
 Python 3.8
 Author: Adam Turner <turner.adch@gmail.com>
@@ -6,7 +6,6 @@ Author: Adam Turner <turner.adch@gmail.com>
 
 # standard library
 import datetime
-import sys
 # python package index
 import lxml.html
 import pandas as pd
@@ -66,33 +65,9 @@ def load(df):
     Args:
         df: pandas DataFrame object
     """
-
-
-    return None
-
-
-def pipeline():
-    cmd = {"ticker": "AMZN", "year": datetime.datetime.today().year, "month": 1, "day": 1}
-
-    for i, k in enumerate(cmd):
-        try:
-            cmd[k] = sys.argv[i+1]
-        except IndexError:
-            break
-
-    print(cmd)
-
-    r = extract(cmd)
-
-    df = transform(r, cmd["ticker"])
-
-    load(df)
-
-    # TODO: debug and add send to db function
-    breakpoint()
+    conn = conndb.DBConfig.from_json("/app/cfg/postgres-test")
+    with conn.cursor() as curs:
+        curs.execute()
+    conn.close()
 
     return None
-
-
-if __name__ == "__main__":
-    pipeline()

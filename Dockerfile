@@ -10,7 +10,7 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --upgrade -r /app/requirements.txt
 
-COPY main.py /app/main.py
+COPY src /app/src
 
 ENTRYPOINT [ "python" ]
-CMD /app/main.py ${TICKER} ${YEAR} ${MONTH} ${DAY}
+CMD /app/src/main.py ${TICKER} ${YEAR} ${MONTH} ${DAY}
