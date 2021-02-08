@@ -6,26 +6,28 @@ Author: Adam Turner <turner.adch@gmail.com>
 
 # standard library
 import datetime
+import io
+import re
 # python package index
 import lxml.html
 import pandas as pd
 import requests
-# eden library
-import conndb
 
 
-def extract(cmd):
+def extract(start_date, ticker):
     """Requests data from Yahoo Finance.
 
     Args:
-        cmd: dict with start date from command line arguments
+        start_date: datetime datetime object to start 
+        ticker: str ticker name
 
     Returns:
         requests Response object
     """
-    p1 = int(datetime.datetime(year=int(cmd["year"]), month=int(cmd["month"]), day=int(cmd["day"])).timestamp())
+    print("Extracting...")
+    p1 = int(start_date.timestamp())
     p2 = int(datetime.datetime.today().timestamp())
-    url = f"https://finance.yahoo.com/quote/{cmd['ticker']}/history?" \
+    url = f"https://finance.yahoo.com/quote/{ticker}/history?" \
         f"period1={p1}&" \
         f"period2={p2}&interval=1d&filter=history&frequency=1d&includeAdjustedClose=true"
     headers = {"user-agent": "Mozilla/5.0 (X11; Fedora; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.96 Safari/537.36"}
@@ -33,17 +35,18 @@ def extract(cmd):
     return requests.get(url, headers=headers)
 
 
-def transform(r, ticker):
+def transform(response, ticker):
     """Processes data from the HTML response.
 
     Args:
-        r: requests Response object
-        ticker: str ticker
+        response: requests Response object
+        ticker: str ticker name
 
     Returns:
         df: pandas DataFrame object
     """
-    doc = lxml.html.fromstring(r.text)
+    print("Transforming...")
+    doc = lxml.html.fromstring(response.text)
     matrix = doc.xpath("//table[@data-test='historical-prices']//td")
 
     numcols = 7
@@ -53,21 +56,28 @@ def transform(r, ticker):
 
     df = pd.DataFrame.from_records(records)
     df.columns = ["date", "open", "high", "low", "close", "adj_close", "volume"]
+    df.replace(to_replace=re.compile(r","), value="", inplace=True)
     df.dropna(axis=0, how="any", inplace=True)
     df.insert(loc=0, column="ticker", value=ticker)
 
     return df
 
 
-def load(df):
+def load(df, conn):
     """Loads data into Postgres database.
 
     Args:
         df: pandas DataFrame object
+        conn: live psycopg2 Connection object
     """
-    conn = conndb.DBConfig.from_json("/app/cfg/postgres-test")
-    with conn.cursor() as curs:
-        curs.execute()
-    conn.close()
+    print(f"Loading...\n{df.head()}")
+    with io.StringIO() as csv_buffer:
+        df.to_csv(csv_buffer, sep=",", header=True, index=False)
+        csv_buffer.seek(0)
+        with conn.cursor() as curs:
+            query = "COPY market_data.hist_yahoo_finance_staging FROM STDIN WITH (FORMAT csv, DELIMITER ',', HEADER TRUE);"
+            curs.copy_expert(query, csv_buffer)
+    conn.commit()
+    print("Commit!")
 
     return None
